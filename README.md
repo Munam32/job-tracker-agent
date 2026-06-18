@@ -47,42 +47,140 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-### 3. Configure
-Set these environment variables (or edit `config.py` directly):
+### 3. Configure APIs
 
+This project requires **three** Google APIs. Follow each section below in order.
+
+---
+
+#### 3a. Google Sheets API + Google Drive API
+
+These two APIs work together — the system uses a **Service Account** to write data to a Google Sheet.
+
+**Step 1 — Create a Google Cloud project**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Click the project dropdown at the top of the page → click **New Project**
+3. Name it something like `Job Tracker` → click **Create**
+4. Make sure the new project is selected in the dropdown
+
+**Step 2 — Enable the APIs**
+1. In the left sidebar, go to **APIs & Services** → **Library**
+2. Search for **Google Sheets API** → click it → click **Enable**
+3. Go back to the Library → search for **Google Drive API** → click it → click **Enable**
+
+**Step 3 — Create a Service Account**
+1. Go to **APIs & Services** → **Credentials**
+2. Click **+ Create Credentials** → select **Service Account**
+3. Give it a name (e.g. `job-tracker-sa`) → click **Create and Continue**
+4. Skip the optional role grants → click **Done**
+5. In the **Service Accounts** list, click the email address of the one you just created
+6. Go to the **Keys** tab → click **Add Key** → **Create New Key**
+7. Choose **JSON** → click **Create** — a `.json` file will download automatically
+8. Rename it to `credentials.json` and place it in the project root (`Job_Tracker/credentials.json`)
+
+**Step 4 — Create and share the Google Sheet**
+1. Go to [sheets.new](https://sheets.new) (or create via Google Drive)
+2. Name the spreadsheet **"Job Tracker"** (must match `GOOGLE_SHEET_NAME` in config)
+3. Copy the **Service Account email** — it looks like `job-tracker-sa@<project-id>.iam.gserviceaccount.com` (find it in the **Service Accounts** list in Google Cloud Console)
+4. Click **Share** in the top-right of the sheet → paste the service account email → grant **Editor** access → click **Send**
+
+> **Verify**: The sheet should appear empty; the system will auto-create the "Applications" worksheet with headers on first run.
+
+---
+
+#### 3b. Gmail API
+
+This API uses **OAuth 2.0** (not a Service Account) to read your personal Gmail inbox.
+
+**Step 1 — Enable the API**
+1. In Google Cloud Console → **APIs & Services** → **Library**
+2. Search for **Gmail API** → click it → click **Enable**
+
+**Step 2 — Configure the OAuth consent screen**
+1. Go to **APIs & Services** → **OAuth consent screen**
+2. Select **External** user type → click **Create**
+3. Fill in:
+   - **App name**: `Job Tracker`
+   - **User support email**: your email
+   - **Developer contact email**: your email
+4. Click **Save and Continue**
+5. **Scopes**: click **Add or Remove Scopes** → search for `Gmail API` → select `../auth/gmail.readonly` → click **Update** → **Save and Continue**
+6. **Test users**: click **Add Users** → add your own Gmail address → **Save and Continue**
+7. Review and click **Back to Dashboard**
+
+**Step 3 — Create OAuth 2.0 credentials**
+1. Go to **APIs & Services** → **Credentials**
+2. Click **+ Create Credentials** → **OAuth client ID**
+3. For **Application type**, choose **Desktop app**
+4. Name: `Job Tracker Desktop Client`
+5. Click **Create**
+6. A popup shows your Client ID and Secret — click **Download JSON**
+7. Rename the file to `gmail_credentials.json` and place it in the project root (`Job_Tracker/gmail_credentials.json`)
+
+**Step 4 — Authorize the application**
 ```bash
-# Linux / macOS
-export GEMINI_API_KEY="your-gemini-key"
+python -m gmail
+```
+This will open a browser window asking you to sign in to Google and grant read-only Gmail access. After authorizing, a `gmail_token.json` file is created automatically in the project root. You only need to do this once.
+
+> **Troubleshooting**: If authorization fails, delete `gmail_token.json` and re-run `python -m gmail`. Make sure your Gmail address is added as a **Test user** in the OAuth consent screen.
+
+---
+
+#### 3c. Gemini API
+
+The system uses Google's Gemini AI (free tier) to classify email content and extract job status.
+
+1. Go to [Google AI Studio](https://aistudio.google.com/)
+2. Sign in with your Google account
+3. Click **Get API Key** in the left sidebar
+4. Click **Create API Key** → select your Google Cloud project (or create a new one)
+5. Copy the API key
+
+This only needs to be stored as an environment variable (next step) or in `config.py`. No credential files are needed.
+
+---
+
+### 4. Configure Environment Variables
+
+The system reads configuration from environment variables. Choose your method:
+
+**Option A — Linux / macOS (temporary, per session)**
+```bash
+export GEMINI_API_KEY="AIzaSy..."
 export GOOGLE_CREDENTIALS_FILE="credentials.json"
 export GMAIL_CREDENTIALS_FILE="gmail_credentials.json"
 export GOOGLE_SHEET_NAME="Job Tracker"
 ```
 
+**Option B — Windows PowerShell (temporary, per session)**
 ```powershell
-# Windows (PowerShell session)
-$env:GEMINI_API_KEY="your-gemini-key"
+$env:GEMINI_API_KEY="AIzaSy..."
 $env:GOOGLE_CREDENTIALS_FILE="credentials.json"
 $env:GMAIL_CREDENTIALS_FILE="gmail_credentials.json"
 $env:GOOGLE_SHEET_NAME="Job Tracker"
 ```
 
+**Option C — Windows (persistent via setx)**
 ```powershell
-# Windows (persistent via setx)
-setx GEMINI_API_KEY "your-gemini-key"
+setx GEMINI_API_KEY "AIzaSy..."
 setx GOOGLE_CREDENTIALS_FILE "credentials.json"
 setx GMAIL_CREDENTIALS_FILE "gmail_credentials.json"
 setx GOOGLE_SHEET_NAME "Job Tracker"
 ```
 
-<details>
-<summary>📋 Detailed Google Cloud setup</summary>
+**Option D — Edit config.py directly** (not recommended for shared machines)
+Open `config.py` and replace the empty values:
+```python
+GEMINI_API_KEY = "AIzaSy..."
+GOOGLE_CREDENTIALS_FILE = "credentials.json"
+GMAIL_CREDENTIALS_FILE = "gmail_credentials.json"
+GOOGLE_SHEET_NAME = "Job Tracker"
+```
 
-1. **Sheets API** — create a Service Account → download JSON → save as `credentials.json` → create "Job Tracker" sheet → share with service account email as Editor
-2. **Gmail API** — create OAuth 2.0 Client ID (Desktop app) → download JSON → save as `gmail_credentials.json` → run `python -m gmail` to authorize (creates `gmail_token.json`)
-3. **Gemini** — get free API key from [Google AI Studio](https://aistudio.google.com)
-</details>
+> **Note**: Environment variables take precedence over `config.py` defaults. If you set both, the env var wins.
 
-### 4. Run
+### 5. Run
 ```bash
 # First-time Gmail authorization
 python -m gmail
