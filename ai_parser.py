@@ -4,10 +4,9 @@ Extracts: title, location, salary, required skills, and a short summary.
 """
 
 import json
-import os
 from typing import Optional
 
-import google.generativeai as genai
+from google import genai
 from config import GEMINI_API_KEY, GEMINI_MODEL
 
 
@@ -55,8 +54,34 @@ class AIParser:
                 "Add it to your environment or config.py. "
                 "Get a free API key from https://aistudio.google.com/"
             )
-        genai.configure(api_key=GEMINI_API_KEY)
-        self.model = genai.GenerativeModel(GEMINI_MODEL)
+        self.client = genai.Client(api_key=GEMINI_API_KEY)
+        self.model_name = GEMINI_MODEL
+
+    def _generate(self, prompt: str) -> Optional[str]:
+        try:
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+            )
+            return response.text.strip() if response.text else None
+        except Exception as e:
+            print(f"Gemini API error: {e}")
+            return None
+
+    def _parse_json_response(self, raw: str) -> Optional[dict]:
+        if not raw:
+            return None
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        if raw.lower() == "null":
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
 
     def parse_jd(self, jd_text: str) -> Optional[dict]:
         """
@@ -67,49 +92,17 @@ class AIParser:
         if not jd_text or not jd_text.strip():
             return None
 
-        try:
-            prompt = f"{SYSTEM_PROMPT}\n\nJob Description:\n{jd_text[:8000]}"
-            response = self.model.generate_content(prompt)
-            raw = response.text.strip()
-
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-                raw = raw.strip()
-
-            return json.loads(raw)
-
-        except json.JSONDecodeError:
-            return None
-        except Exception as e:
-            print(f"Gemini API error: {e}")
-            return None
+        prompt = f"{SYSTEM_PROMPT}\n\nJob Description:\n{jd_text[:8000]}"
+        raw = self._generate(prompt)
+        return self._parse_json_response(raw)
 
     def parse_with_ai(self, prompt: str) -> Optional[dict]:
         """
         Generic method to parse any prompt with AI and return JSON.
         Used for email status parsing.
         """
-        try:
-            response = self.model.generate_content(prompt)
-            raw = response.text.strip()
-
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-                raw = raw.strip()
-
-            if raw.lower() == 'null':
-                return None
-            return json.loads(raw)
-
-        except json.JSONDecodeError:
-            return None
-        except Exception as e:
-            print(f"Gemini API error: {e}")
-            return None
+        raw = self._generate(prompt)
+        return self._parse_json_response(raw)
 
     def assess_fit(self, jd_text: str, resume_summary: str) -> str:
         """
@@ -122,9 +115,7 @@ class AIParser:
             "In 3-4 sentences, assess how well this candidate fits the role. "
             "Be direct and specific."
         )
-
-        try:
-            response = self.model.generate_content(prompt)
-            return response.text.strip()
-        except Exception as e:
-            return f"Error assessing fit: {e}"
+        raw = self._generate(prompt)
+        if raw is None:
+            return "Error assessing fit"
+        return raw

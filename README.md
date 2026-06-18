@@ -4,20 +4,21 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-beta-yellow.svg)]()
 
-A CLI-based job tracking agent that scrapes listings from LinkedIn, Indeed, Rozee.pk, and direct URLs, parses job descriptions using Google's Gemini AI, syncs everything to Google Sheets, and automatically updates application status from Gmail emails.
+A CLI-based job tracking agent that reads unread job-related emails via Gmail API, classifies them using Google's Gemini AI, and syncs application status updates to Google Sheets. Also supports manual job entry for tracking applications from any source.
 
 ---
 
 ## Features
 
-- **Multi-source scraping** — scrapes job listings from LinkedIn, Indeed, Rozee.pk, or any direct URL
-- **AI-powered JD parsing** — extracts job title, required skills, salary range, and summary from job descriptions using Gemini 1.5 Flash (free tier)
 - **Gmail auto-detection** — reads unread job-related emails and auto-updates application status (e.g., "Applied" → "Interview Scheduled") in Google Sheets
-- **Daily scheduler** — runs the Gmail check automatically every day at 12:00 PM PKT via APScheduler
+- **AI-powered email classification** — uses Gemini 1.5 Flash (free tier) to extract company, role, and status from email content
+- **Daily auto-scheduler** — runs the Gmail check automatically every day at 12:00 PM PKT (via system scheduler, no terminal needed)
+- **Manual on-demand check** — run `python agent.py check-emails` anytime to catch up immediately
 - **Manual job entry** — add jobs by hand with optional JD paste for AI parsing
 - **Status tracking** — moves applications through a defined pipeline: Saved → Applied → Interview Scheduled → Interviewing → Offered / Rejected / Ghosted
 - **Follow-up reminders** — view all overdue follow-ups at a glance
 - **Google Sheets sync** — single source of truth accessible from anywhere
+- **Auto-creates sheet** — creates "Applications" worksheet automatically if missing
 
 ---
 
@@ -96,14 +97,11 @@ Alternatively, edit these values directly in `config.py`.
 ## Usage
 
 ```bash
-# Check Gmail for job status updates (manual)
+# Check Gmail for job status updates (on-demand manual run)
 python agent.py check-emails
 
-# Add a job manually
+# Add a job manually (for referrals, direct applications, etc.)
 python agent.py add
-
-# Scrape job listings
-python agent.py scrape
 
 # List all applications
 python agent.py list
@@ -117,34 +115,73 @@ python agent.py update
 # See overdue follow-up reminders
 python agent.py followup
 
-# Run the daily scheduler (12:00 PM PKT)
+# Run email check once and exit (used by auto-start systems)
+python scheduler.py --once
+
+# Run scheduler in daemon mode (stays alive, checks daily at 12 PM)
 python scheduler.py
 ```
 
 ---
 
-## Project Structure
+## Auto-Start (Daily 12:00 PM Email Check)
+
+The scheduler can run automatically every day at 12:00 PM without manual intervention. An auto-start installer is provided for all platforms.
+
+**Requirements:**
+- Virtual environment created (`python -m venv venv`)
+- Dependencies installed (`venv\Scripts\pip install -r requirements.txt` on Windows, or `venv/bin/pip install -r requirements.txt` on macOS/Linux)
+- First-time Gmail authentication completed (`python -m gmail`)
+
+**Install:**
+
+```bash
+python setup_autostart.py
+```
+
+This detects your operating system and configures:
+
+| Platform | Mechanism | Admin Required |
+|----------|-----------|----------------|
+| Windows  | Task Scheduler | Yes (run PowerShell as Admin) |
+| macOS    | launchd (user agent) | No |
+| Linux    | systemd user timer | No |
+
+**Uninstall:**
+
+| Platform | Command |
+|----------|---------|
+| Windows  | `Unregister-ScheduledTask -TaskName 'JobTracker_DailyEmailCheck' -Confirm:$false` (PowerShell Admin) |
+| macOS    | `launchctl unload ~/Library/LaunchAgents/com.user.jobtracker.daily.plist && rm ~/Library/LaunchAgents/com.user.jobtracker.daily.plist` |
+| Linux    | `systemctl --user disable --now jobtracker-daily.timer && rm ~/.config/systemd/user/jobtracker-daily.* && systemctl --user daemon-reload` |
+
+**Logs:** All scheduler output is written to `logs/scheduler.log` (and `logs/scheduler_error.log` for errors).
+
+---
 
 ```
 Job_Tracker/
-├── agent.py          # CLI entry point (argparse commands)
-├── scraper.py        # Web scraping (LinkedIn, Indeed, Rozee.pk, URLs)
-├── ai_parser.py      # Gemini-powered JD parsing
-├── sheets.py         # Google Sheets read/write via gspread
-├── gmail.py          # Gmail OAuth + email parsing
-├── scheduler.py      # APScheduler daily 12 PM PKT trigger
-├── config.py         # Central configuration from env vars
-├── requirements.txt  # Python dependencies
-├── .gitignore        # Excludes credentials and secrets
-├── LICENSE           # Apache 2.0
-└── README.md         # This file
+├── agent.py                    # CLI entry point (argparse commands)
+├── ai_parser.py                # Gemini-powered JD & email parsing
+├── sheets.py                   # Google Sheets read/write via gspread
+├── gmail.py                    # Gmail OAuth + email fetching
+├── scheduler.py                # Daily 12 PM PKT email check (--once support)
+├── config.py                   # Central configuration from env vars
+├── requirements.txt            # Python dependencies
+├── .gitignore                  # Excludes credentials and secrets
+├── LICENSE                     # Apache 2.0
+├── setup_autostart.py          # Cross-platform auto-start installer
+├── setup_autostart.ps1         # Windows Task Scheduler setup
+├── setup_autostart_macos.sh    # macOS launchd setup
+├── setup_autostart_linux.sh    # Linux systemd user timer setup
+└── README.md                   # This file
 ```
 
 ---
 
 ## Architecture Overview
 
-The user invokes `agent.py`, which delegates to specialized modules. `scraper.py` fetches job listings from configured sources and passes raw descriptions to `ai_parser.py`, which uses Gemini to extract structured fields (title, skills, salary, summary). Structured data is written to Google Sheets via `sheets.py`. Separately, `gmail.py` reads unread job-related emails, matches them against existing sheet rows by thread ID, and updates the status column (e.g., "Applied" → "Interview Scheduled"). `scheduler.py` wraps the Gmail check with APScheduler for daily unattended execution at 12:00 PM PKT. All configuration flows through `config.py`, which reads environment variables with sensible defaults.
+The system has two entry points. `agent.py` is the CLI interface for manual operations (check-emails, add, list, update, followup). `scheduler.py` is designed for unattended use — it runs `--once` for one-shot execution (invoked by system schedulers) or in daemon mode for persistent background operation. Both use `gmail.py` to fetch unread job-related emails and `ai_parser.py` to classify them via Gemini, extracting company, role, and status. Matched applications are updated in Google Sheets via `sheets.py`; unmatched ones create new rows. `sheets.py` auto-creates the "Applications" worksheet if it does not exist. All configuration flows through `config.py`, which reads environment variables with sensible defaults.
 
 ---
 
@@ -181,9 +218,6 @@ Saved → Applied → Interview Scheduled → Interviewing → Offered
 
 ## Troubleshooting
 
-**Scraping fails for LinkedIn / Indeed**
-These platforms actively block automated scrapers. If scraping returns no results, use `python agent.py add` with a direct job URL instead.
-
 **"Module not found" errors**
 Ensure your virtual environment is activated and dependencies are installed: `pip install -r requirements.txt`.
 
@@ -193,6 +227,12 @@ Delete `gmail_token.json` and re-run `python -m gmail` to trigger a fresh browse
 **Google Sheets not updating**
 Verify the sheet is named exactly "Job Tracker" (case-sensitive) and has been shared with the service account email as Editor.
 
+**Emails not being picked up**
+Check the `GMAIL_QUERY` in `config.py` — it searches for unread emails matching interview/offer/rejection subjects and common recruiter senders. Adjust the query if your emails use different patterns.
+
+**No new applications created from emails**
+The email classifier uses Gemini AI. If the AI returns low confidence or null, the email is skipped. Check `logs/scheduler.log` for details.
+
 ---
 
 ## Testing
@@ -200,17 +240,14 @@ Verify the sheet is named exactly "Job Tracker" (case-sensitive) and has been sh
 No automated test suite is currently available. Manual verification is recommended after each change:
 
 ```bash
-# Verify scraping works
-python agent.py scrape --source url --url "https://example.com/job"
-
 # Verify manual add with AI parsing
 python agent.py add
 
 # Verify Gmail detection
 python agent.py check-emails
 
-# Verify scheduler starts
-python scheduler.py
+# Verify one-shot scheduler mode
+python scheduler.py --once
 ```
 
 ---

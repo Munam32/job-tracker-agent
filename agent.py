@@ -13,7 +13,6 @@ from rich.prompt import Prompt, Confirm
 from rich import print as rprint
 
 from sheets import SheetsClient
-from scraper import JobScraper
 from ai_parser import AIParser
 from config import STATUS_OPTIONS
 from gmail import GmailClient, parse_email_status
@@ -73,66 +72,6 @@ def cmd_add(args, sheets: SheetsClient, parser: AIParser):
         sheets.add_job(job)
 
     console.print(f"\n[bold green]✅ Added:[/bold green] {role} @ {company}")
-
-
-def cmd_scrape(args, sheets: SheetsClient, scraper: JobScraper, parser: AIParser):
-    """Scrape job listings from a URL or keyword search."""
-    console.print("\n[bold cyan]🔍 Scrape Job Listings[/bold cyan]\n")
-
-    source = Prompt.ask(
-        "[yellow]Source[/yellow]",
-        choices=["linkedin", "indeed", "rozee", "url"],
-        default="linkedin"
-    )
-
-    if source == "url":
-        url = Prompt.ask("[yellow]Paste the job listing URL[/yellow]")
-        with console.status("[bold green]Scraping..."):
-            jobs = scraper.scrape_url(url)
-    else:
-        keyword  = Prompt.ask("[yellow]Job keyword[/yellow] (e.g. 'Python Developer')")
-        location = Prompt.ask("[yellow]Location[/yellow] (e.g. 'Lahore')", default="Pakistan")
-        with console.status(f"[bold green]Scraping {source}..."):
-            jobs = scraper.scrape(source, keyword, location)
-
-    if not jobs:
-        console.print("[red]No jobs found or scraping blocked. Try a direct URL.[/red]")
-        return
-
-    console.print(f"\n[green]Found {len(jobs)} listings.[/green] Parsing with AI...\n")
-
-    parsed_jobs = []
-    for job in jobs:
-        with console.status(f"[dim]Parsing: {job.get('title','?')} @ {job.get('company','?')}[/dim]"):
-            if job.get("description"):
-                parsed = parser.parse_jd(job["description"])
-                if parsed:
-                    job["skills_required"] = ", ".join(parsed.get("skills", []))
-                    job["salary"]          = job.get("salary") or parsed.get("salary", "")
-        parsed_jobs.append(job)
-
-    # Show preview table
-    table = Table(title="Scraped Jobs", show_lines=True)
-    table.add_column("#",        style="dim",    width=3)
-    table.add_column("Company",  style="cyan",   width=20)
-    table.add_column("Role",     style="white",  width=28)
-    table.add_column("Location", style="yellow", width=16)
-    table.add_column("Skills",   style="green",  width=30)
-
-    for i, j in enumerate(parsed_jobs, 1):
-        table.add_row(
-            str(i),
-            j.get("company", ""),
-            j.get("title", ""),
-            j.get("location", ""),
-            j.get("skills_required", "")[:50],
-        )
-    console.print(table)
-
-    if Confirm.ask(f"\n[cyan]Save all {len(parsed_jobs)} jobs to Sheets?[/cyan]", default=True):
-        with console.status("[bold green]Saving to Google Sheets..."):
-            added = sheets.bulk_add_jobs(parsed_jobs)
-        console.print(f"[bold green]✅ Saved {added} new jobs.[/bold green]")
 
 
 def cmd_list(args, sheets: SheetsClient):
@@ -363,15 +302,12 @@ def cmd_check_emails(args, sheets: SheetsClient, parser: AIParser):
 def main():
     parser_cli = argparse.ArgumentParser(
         prog="agent",
-        description="🎯 Job Tracking Agent — CLI",
+        description="Job Tracking Agent — CLI",
     )
     sub = parser_cli.add_subparsers(dest="command", required=True)
 
     # add
     sub.add_parser("add",     help="Manually add a job application")
-
-    # scrape
-    sub.add_parser("scrape",  help="Scrape job listings from a site or URL")
 
     # list
     p_list = sub.add_parser("list", help="List all tracked applications")
@@ -391,7 +327,6 @@ def main():
     # Init clients
     try:
         sheets  = SheetsClient()
-        scraper = JobScraper()
         ai      = AIParser()
     except Exception as e:
         console.print(f"[bold red]Startup error:[/bold red] {e}")
@@ -400,7 +335,6 @@ def main():
 
     dispatch = {
         "add":         lambda: cmd_add(args, sheets, ai),
-        "scrape":      lambda: cmd_scrape(args, sheets, scraper, ai),
         "list":        lambda: cmd_list(args, sheets),
         "update":      lambda: cmd_update(args, sheets),
         "followup":    lambda: cmd_followup(args, sheets),

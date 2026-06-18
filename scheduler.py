@@ -5,6 +5,7 @@ Uses APScheduler with timezone support.
 
 import os
 import logging
+import argparse
 from datetime import datetime
 from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -150,13 +151,32 @@ class JobTrackerScheduler:
 
 
 def main():
-    """Entry point for running scheduler as a standalone script."""
+    """Entry point for running scheduler as a standalone script.
+    
+    Usage:
+        python scheduler.py          # Daemon mode (runs forever, checks daily at 12 PM)
+        python scheduler.py --once   # One-shot mode (checks once and exits)
+    """
+    parser = argparse.ArgumentParser(
+        prog="scheduler",
+        description="Job Tracker Daily Email Scheduler"
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run email check once and exit (used by system auto-start)"
+    )
+    args = parser.parse_args()
+
     if not GEMINI_API_KEY and AI_PROVIDER == "gemini":
         print("ERROR: GEMINI_API_KEY not set in config.py or environment")
         return
-    
+
     scheduler = JobTrackerScheduler()
-    scheduler.start()
+    if args.once:
+        scheduler.run_once()
+    else:
+        scheduler.start()
 
 
 if __name__ == "__main__":

@@ -28,8 +28,12 @@ GMAIL_CREDENTIALS_FILE = os.getenv("GMAIL_CREDENTIALS_FILE", "gmail_credentials.
 # Path to store Gmail OAuth token
 GMAIL_TOKEN_FILE = os.getenv("GMAIL_TOKEN_FILE", "gmail_token.json")
 
-# Gmail query to find job-related emails (unread by default)
-GMAIL_QUERY = os.getenv("GMAIL_QUERY", "is:unread (subject:job OR subject:application OR subject:interview OR subject:offer OR subject:rejection OR from:linkedin OR from:indeed OR from:noreply)")
+# Gmail query to find job update emails (unread by default)
+GMAIL_QUERY = os.getenv("GMAIL_QUERY",
+    'is:unread (subject:interview OR subject:offer OR subject:rejection '
+    'OR subject:"application status" OR subject:"next steps" '
+    'OR from:recruiter OR from:hr OR from:talent OR from:hiring '
+    'OR from:careers OR from:jobs)')
 
 # ─────────────────────────────────────────────
 # AI Model (free options: Gemini, Ollama)
@@ -50,23 +54,6 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 
 # Anthropic API Key (legacy, paid)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-
-# ─────────────────────────────────────────────
-# Scraper settings
-# ─────────────────────────────────────────────
-
-# Delay between requests (seconds) — be respectful
-SCRAPE_DELAY = 2
-
-# Max jobs to scrape per search
-SCRAPE_MAX_RESULTS = 20
-
-# User-agent string for HTTP requests
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Safari/537.36"
-)
 
 # ─────────────────────────────────────────────
 # Application status options
