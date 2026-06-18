@@ -69,7 +69,11 @@ def cmd_add(args, sheets: SheetsClient, parser: AIParser):
     }
 
     with console.status("[bold green]Saving to Google Sheets..."):
-        sheets.add_job(job)
+        added = sheets.add_job(job)
+
+    if not added:
+        console.print(f"\n[yellow]⚠ Duplicate — already exists:[/yellow] {role} @ {company}")
+        return
 
     console.print(f"\n[bold green]✅ Added:[/bold green] {role} @ {company}")
 
@@ -167,6 +171,39 @@ def cmd_update(args, sheets: SheetsClient):
         )
 
     console.print(f"[bold green]✅ Updated to '{new_status}'[/bold green]")
+
+
+def cmd_remove(args, sheets: SheetsClient):
+    """Remove an application from the sheet."""
+    console.print("\n[bold cyan]🗑 Remove Application[/bold cyan]\n")
+
+    with console.status("[bold green]Loading applications..."):
+        jobs = sheets.get_all_jobs()
+
+    if not jobs:
+        console.print("[yellow]No applications found.[/yellow]")
+        return
+
+    for i, j in enumerate(jobs, 1):
+        console.print(f"  [dim]{i}.[/dim] [cyan]{j.get('company')}[/cyan] — {j.get('role')} [{j.get('status')}]")
+
+    idx = Prompt.ask("\n[yellow]Enter # to remove[/yellow]")
+    try:
+        job = jobs[int(idx) - 1]
+    except (ValueError, IndexError):
+        console.print("[red]Invalid number.[/red]")
+        return
+
+    console.print(f"\n[red]Removing:[/red] [bold]{job.get('role')} @ {job.get('company')}[/bold]")
+    confirm = Confirm.ask("[yellow]Are you sure?[/yellow]", default=False)
+    if not confirm:
+        console.print("[dim]Cancelled.[/dim]")
+        return
+
+    with console.status("[bold red]Deleting from Google Sheets..."):
+        sheets.delete_job(job["_row"])
+
+    console.print(f"[bold green]🗑 Removed:[/bold green] {job.get('role')} @ {job.get('company')}")
 
 
 def cmd_followup(args, sheets: SheetsClient):
@@ -313,6 +350,9 @@ def main():
     p_list = sub.add_parser("list", help="List all tracked applications")
     p_list.add_argument("--status", help="Filter by status (e.g. Applied, Interviewing)")
 
+    # remove
+    sub.add_parser("remove",  help="Remove an application from the sheet")
+
     # update
     sub.add_parser("update",  help="Update status/notes for an application")
 
@@ -334,10 +374,11 @@ def main():
         sys.exit(1)
 
     dispatch = {
-        "add":         lambda: cmd_add(args, sheets, ai),
-        "list":        lambda: cmd_list(args, sheets),
-        "update":      lambda: cmd_update(args, sheets),
-        "followup":    lambda: cmd_followup(args, sheets),
+        "add":          lambda: cmd_add(args, sheets, ai),
+        "list":         lambda: cmd_list(args, sheets),
+        "remove":       lambda: cmd_remove(args, sheets),
+        "update":       lambda: cmd_update(args, sheets),
+        "followup":     lambda: cmd_followup(args, sheets),
         "check-emails": lambda: cmd_check_emails(args, sheets, ai),
     }
 

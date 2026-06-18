@@ -29,11 +29,13 @@ GMAIL_CREDENTIALS_FILE = os.getenv("GMAIL_CREDENTIALS_FILE", "gmail_credentials.
 GMAIL_TOKEN_FILE = os.getenv("GMAIL_TOKEN_FILE", "gmail_token.json")
 
 # Gmail query to find job update emails (unread by default)
-GMAIL_QUERY = os.getenv("GMAIL_QUERY",
-    'is:unread (subject:interview OR subject:offer OR subject:rejection '
+GMAIL_QUERY = os.getenv(
+    "GMAIL_QUERY",
+    "is:unread (subject:interview OR subject:offer OR subject:rejection "
     'OR subject:"application status" OR subject:"next steps" '
-    'OR from:recruiter OR from:hr OR from:talent OR from:hiring '
-    'OR from:careers OR from:jobs)')
+    "OR from:recruiter OR from:hr OR from:talent OR from:hiring "
+    "OR from:careers OR from:jobs)",
+)
 
 # ─────────────────────────────────────────────
 # AI Model (free options: Gemini, Ollama)

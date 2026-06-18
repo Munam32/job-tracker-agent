@@ -79,10 +79,25 @@ class SheetsClient:
     # Write
     # ──────────────────────────────────────────
 
-    def add_job(self, job: dict) -> None:
-        """Append a single job row."""
+    def add_job(self, job: dict) -> bool:
+        """Append a single job row. Returns True if added, False if duplicate."""
+        url = (job.get("url") or "").strip()
+        if url and self._url_exists(url):
+            return False
+
+        company = (job.get("company") or "").strip().lower()
+        role    = (job.get("role") or "").strip().lower()
+        if company and role:
+            for j in self.get_all_jobs():
+                if (
+                    (j.get("company") or "").strip().lower() == company
+                    and (j.get("role") or "").strip().lower() == role
+                ):
+                    return False
+
         row = [job.get(col, "") for col in SHEET_COLUMNS]
         self.ws.append_row(row, value_input_option="USER_ENTERED")
+        return True
 
     def bulk_add_jobs(self, jobs: list[dict]) -> int:
         """
@@ -146,6 +161,10 @@ class SheetsClient:
 
         if batch:
             self.ws.batch_update(batch, value_input_option="USER_ENTERED")
+
+    def delete_job(self, row: int) -> None:
+        """Delete a row by its sheet row number (1-indexed)."""
+        self.ws.delete_rows(row)
 
     def append_row(self, job: dict) -> None:
         """Append a single job row (alias for add_job)."""

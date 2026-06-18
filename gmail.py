@@ -126,6 +126,29 @@ class GmailClient:
             print(f"Error marking email as read: {error}")
 
 
+def authorize_gmail():
+    """Run the Gmail OAuth authorization flow manually.
+
+    Creates gmail_token.json if it doesn't exist or is expired.
+    Safe to run multiple times — skips if token is already valid.
+    """
+    if not os.path.exists(GMAIL_CREDENTIALS_FILE):
+        print(
+            f"ERROR: Credentials file not found: {GMAIL_CREDENTIALS_FILE}\n"
+            "Download OAuth 2.0 Client ID (Desktop app) JSON from\n"
+            "  https://console.cloud.google.com/apis/credentials\n"
+            f"and save it as '{GMAIL_CREDENTIALS_FILE}' in the project root.",
+            flush=True,
+        )
+        return
+
+    if os.path.exists(GMAIL_TOKEN_FILE):
+        print(f"Token file '{GMAIL_TOKEN_FILE}' already exists. Checking validity...", flush=True)
+
+    client = GmailClient()
+    print(f"Gmail authorization OK. Token: {GMAIL_TOKEN_FILE}", flush=True)
+
+
 def parse_email_status(email: Dict, ai_parser) -> Optional[Dict]:
     prompt = f"""
     Analyze this job application email and extract the following information as JSON:
@@ -159,3 +182,7 @@ def parse_email_status(email: Dict, ai_parser) -> Optional[Dict]:
     except Exception as e:
         print(f"Error parsing email with AI: {e}")
     return None
+
+
+if __name__ == "__main__":
+    authorize_gmail()
